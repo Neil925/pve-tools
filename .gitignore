@@ -1,0 +1,9 @@
+# Per-machine config: real host addresses and socket paths live here, never in git.
+pve-tools.conf
+
+# Scratch area for files being staged into containers. Contents are transient.
+stage/
+
+# Editors
+*.swp
+*~

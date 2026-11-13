@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# pve — run a command on the Proxmox host, over a socket a human already opened.
+#
+#   pve 'pct list'
+#   pve 'pct config 103'
+#   pve 'pvesh get /version'
+#
+# Whatever you write runs in a shell on the HOST. To work inside a container use
+# pct(1), which also puts your pipes and redirections inside that container.
+#
+# Exits 90 with instructions if the SSH master is not live. It will never open a
+# connection of its own and never wait on a password prompt.
+set -euo pipefail
+
+. "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../lib/common.sh"
+
+if [ $# -eq 0 ]; then
+    printf 'usage: pve %s<command>%s\n' "'" "'" >&2
+    exit 2
+fi
+
+require_master
+pve_ssh "$*"

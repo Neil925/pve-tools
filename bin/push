@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# push — stream a file from here into a container, byte for byte.
+#
+#   push <vmid> <local-file|-> <remote-path> [--mode 0600]
+#
+#   push 103 stage/app.env /root/app/.env --mode 0600
+#   push 100 stage/search.conf /etc/nginx/sites-available/search.conf
+#   echo 'literal line' | push 103 - /root/ddns/notes
+#
+# This exists because typing file contents into a terminal is lossy: bursts get
+# truncated, first characters are eaten, trailing newlines vanish. Here the bytes
+# travel on stdin instead of as keystrokes, so they cannot be mangled. No size
+# limit, no quoting hazards, no heredoc.
+#
+# The remote end stages into a temp file and install(1)s it into place, so the
+# file appears complete or not at all, and its mode is set exactly as asked.
+# Nothing about the contents is ever printed — only mode and byte counts.
+set -euo pipefail
+
+. "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../lib/common.sh"
+
+vmid=${1:-}
+case $vmid in
+    ''|*[!0-9]*) printf 'usage: push <vmid> <local-file|-> <remote-path> [--mode 0600]\n' >&2; exit 2 ;;
+esac
+[ $# -ge 3 ] || { printf 'push: need a local file and a remote path\n' >&2; exit 2; }
+local_path=$2
+remote_path=$3
+shift 3
+
+mode=0600
+while [ $# -gt 0 ]; do
+    case $1 in
+        --mode) mode=${2:-}; shift 2 ;;
+        *)      printf 'push: unknown option %s\n' "$1" >&2; exit 2 ;;
+    esac
+done
+case $mode in
+    0[0-7][0-7][0-7]|[0-7][0-7][0-7]) ;;
+    *) printf 'push: --mode wants an octal mode, e.g. 0600 or 0644\n' >&2; exit 2 ;;
+esac
+
+case $local_path in
+    -) ;;
+    *) [ -f "$local_path" ] || { printf 'push: no such local file: %s\n' "$local_path" >&2; exit 1; } ;;
+esac
+
+require_master
+
+remote_cmd=$(cat <<EOF
+set -eu
+mkdir -p -- $(rq "$(dirname -- "$remote_path")")
+tmp=\$(mktemp /tmp/push.XXXXXX)
+cat > "\$tmp"
+install -m $mode "\$tmp" $(rq "$remote_path")
+rm -f "\$tmp"
+stat -c 'remote: mode=%a bytes=%s path=%n' $(rq "$remote_path")
+EOF
+)
+
+pve_ssh "pct exec $vmid -- sh -c $(rq "$remote_cmd")" < "$local_path"
+
+if [ "$local_path" != - ]; then
+    printf 'local:  bytes=%s path=%s\n' "$(wc -c < "$local_path")" "$local_path"
+fi
+printf 'compare the two byte counts above, or verify with:\n'
+printf "  pct %s 'md5sum %s'\\n" "$vmid" "$remote_path"

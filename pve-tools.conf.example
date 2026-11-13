@@ -1,0 +1,12 @@
+# pve-tools.conf.example — copy to pve-tools.conf and edit for this machine.
+#
+#   cp pve-tools.conf.example pve-tools.conf
+#
+# pve-tools.conf is gitignored on purpose: it holds real addresses. Every script
+# reads it, and a real environment variable still wins over anything set here.
+
+# Where the Proxmox host lives. Include the user that owns the session.
+PVE_HOST=${PVE_HOST:-root@pve.example.internal}
+
+# Control socket opened by a human. See README: only a person ever opens this.
+PVE_SOCK=${PVE_SOCK:-$HOME/.ssh/sockets/pve.sock}

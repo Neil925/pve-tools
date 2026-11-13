@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# pct — run a command inside an LXC guest on the Proxmox host.
+#
+#   pct 103 'ls -l /root'
+#   pct 103 'cd /root/app && docker compose up -d'
+#   pct 100 'nginx -t'
+#
+# Wraps `pct exec <vmid> -- sh -c '<command>'`, which changes two things about
+# the raw Proxmox command:
+#
+#   1. `--` is always present, so a flag meant for the container's command is
+#      never parsed by pct itself.
+#   2. The command runs in a shell INSIDE the guest, so pipes, redirections and
+#      globs apply there. `pct exec 103 -- printf x > /root/f` writes on the
+#      host; `pct 103 'printf x > /root/f'` writes in the container.
+#
+# This is NOT Proxmox's pct. It refuses anything whose first argument is not a
+# numeric VMID, so `pct list` on a real Proxmox host is never quietly hijacked:
+# there, the real binary also wins, because install.sh keeps this dir at the
+# END of PATH.
+set -euo pipefail
+
+. "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../lib/common.sh"
+
+vmid=${1:-}
+case $vmid in
+    ''|*[!0-9]*)
+        printf "usage: pct <vmid> '<command>'    e.g.  pct 103 'ls -l /root'\n" >&2
+        printf 'the first argument must be a numeric VMID; this is pve-tools, not Proxmox pct\n' >&2
+        exit 2
+        ;;
+esac
+[ $# -ge 2 ] || { printf 'pct: no command given\n' >&2; exit 2; }
+shift
+
+require_master
+pve_ssh "pct exec $vmid -- sh -c $(rq "$*")"

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# pull — stream a file out of a container to here, byte for byte.
+#
+#   pull <vmid> <remote-path> [local-path]
+#
+#   pull 100 /etc/nginx/sites-available/somehost.conf stage/somehost.conf
+#   pull 103 /root/app/core-config/settings.yml
+#
+# With no local path the file lands in ./stage/<basename>, which pve-tools
+# creates and gitignores.
+#
+# This is how a big remote file gets read properly: the panel can only show you
+# a screenful at a time and re-shows its whole scrollback on every read. Pull the
+# file and open it with a real reader instead.
+#
+# The remote size is measured before and compared to the local size after, so a
+# truncated transfer is visible rather than silent. Contents are never printed.
+set -euo pipefail
+
+. "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../lib/common.sh"
+
+vmid=${1:-}
+case $vmid in
+    ''|*[!0-9]*) printf 'usage: pull <vmid> <remote-path> [local-path]\n' >&2; exit 2 ;;
+esac
+[ $# -ge 2 ] || { printf 'pull: no remote path given\n' >&2; exit 2; }
+remote_path=$2
+shift 2
+
+local_path=${1:-}
+if [ -z "$local_path" ]; then
+    mkdir -p "$here/stage"
+    local_path="$here/stage/$(basename -- "$remote_path")"
+fi
+
+require_master
+
+remote_size=$(pve_ssh "pct exec $vmid -- sh -c $(rq "stat -c %s $(rq "$remote_path")")")
+
+mkdir -p -- "$(dirname -- "$local_path")"
+pve_ssh "pct exec $vmid -- sh -c $(rq "cat -- $(rq "$remote_path")")" > "$local_path"
+
+local_size=$(wc -c < "$local_path")
+printf 'remote: bytes=%s path=%s\n' "$remote_size" "$remote_path"
+printf 'local:  bytes=%s path=%s\n' "$local_size" "$local_path"
+if [ "$remote_size" != "$local_size" ]; then
+    printf 'pull: SIZE MISMATCH — the transfer did not complete\n' >&2
+    exit 1
+fi
