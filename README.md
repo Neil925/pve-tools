@@ -1,5 +1,12 @@
 # pve-tools
 
+> **Superseded.** This repo is archived. The generalized successor is
+> [`agent-ssh-tools`](https://github.com/Neil925/agent-ssh-tools) — same design,
+> five commands (`sshq`, `pct`, `qm`, `push`, `pull`), a multi-target registry,
+> full-VM support through the QEMU guest agent, and an offline test suite.
+> Do not install this one; `pct`, `push` and `pull` here collide by name with
+> the successor's.
+
 Four commands that run work on a Proxmox host and its LXC guests, over an SSH
 control socket that **a human** opened.
 
